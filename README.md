@@ -1,7 +1,7 @@
 # Kops-Terraform-Ansible-Prometheus-Grafana-Ingress-Nginx-Controller
 ## Self managed kubernetes automated deployment
 
-This repo will automate much of the process to deploy a self managed Kubernetes cluster with Prometheus and Grafana.
+This repo will automate most of the deployment and configuration of a self managed Kubernetes cluster with Prometheus and Grafana.
 
 ## Technology Stack
 - Kops
@@ -26,11 +26,13 @@ This repo will automate much of the process to deploy a self managed Kubernetes 
 
 - I will have this break down in two forms, a TLDR to get you up and running, while the other will be a more in depth explanation of how the entire repo works so you can make it your own.
 
+- For our Prometheus and Grafana we use yaml configurations and helm charts of [kube-prometheus-stack](https://github.com/prometheus-community/helm-charts/tree/main/charts/kube-prometheus-stack)
+
 ## Caveats
 
 - This is a public topology cluster with Prometheus and Grafana aimed to be pushed on subdomains, this is typically not best practice and I'd recommend setting up a proxy with authentication in front of them to protect against warry attackers.
 
-- This is setup to depend on your domain being hosted in route53, you can have your domain with a different registar, just know you'll have to edit the config to your needs and update the CNAME on your registar too. I'd recommend the documentation advice on using a different registar [here](https://kops.sigs.k8s.io/getting_started/aws/) on the "Scenario 3: Subdomain for clusters in route53, leaving the domain at another registrar". At the end of this README I will have a section on what you'll need to remove from the repo for easier configuration for you.
+- This is setup to depend on your domain being hosted in route53, you can have your domain with a different registar, just know you'll have to edit the config to your needs and update the CNAME on your registar too. I'd recommend the documentation advice on using a different registar [here](https://kops.sigs.k8s.io/getting_started/aws/) on the "Scenario 3: Subdomain for clusters in route53, leaving the domain at another registrar". At the end of this README I will have a section on what you'll need to remove from the repo for easier configuration for your custom deployment.
 
 - There has been issue if you have a hosted-zone for your domain as this will deploy another hosted-zone for your domain. For testing purposes if you face any trouble with reaching nameservers with the cmd `dig NS yoursubdomain.domain.com` then delete the hosted-zone thats not managed by terraform and retry again.
 
