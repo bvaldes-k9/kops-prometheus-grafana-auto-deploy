@@ -1,0 +1,105 @@
+---
+- hosts: 127.0.0.1
+  become: false
+  connection: local
+  gather_facts: no
+  tasks:
+    - name: Main Terraform deployment
+      shell: |
+        cd ..
+        cd terraform
+        terraform init
+        terraform apply -auto-approve
+        cd ..
+        cd ansible
+      
+      #Includes the variables outputted by terraform
+    - include_vars: tf_ansible_vars_file.yml
+
+    - name: kops create config
+      command: |
+        kops create cluster {{ tf_route53 }} \
+        --cloud=aws \
+        --vpc={{ tf_vpc_id }} \
+        --networking=amazonvpc \
+        --master-zones={{ tf_master0az }} \
+        --subnets={{ tf_subnets }} \
+        --zones={{ tf_subnetazs }} \
+        --node-count=4 \
+        --master-size=m4.xlarge \
+        --node-size=m4.large \
+        --kubernetes-version=1.21.1 \
+        --topology public \
+        --dns public \
+        --dns-zone={{ tf_route53 }}
+
+    - name: kops update cluster
+      command: kops update cluster {{ tf_route53 }} --yes
+    
+    - name: sleep for 30 seconds & continue
+      wait_for:
+        timeout: 30
+
+      #If your testing this and redeploy many times you may be faced an unauthorized error,
+      #The refresh cert solves that and is implemented for that case.
+    - name: Refresh cert
+      command: kops export kubecfg --admin
+      
+      # This will print out how many instances and ensure not to continue until its counted the set number of instances. 
+      # If you add or change the number of instances please remember to update the count at "count_read_nodes.stdout "
+    - name: wait for cluster to be ready
+      shell: kubectl get nodes | grep Ready | wc -l
+      register: count_read_nodes
+      until: count_read_nodes.stdout == "5"
+      retries: 16
+      delay: 60
+
+    - name: prometheus deploy
+      shell: |
+        kubectl apply -f prometheus/0-crd
+        kubectl apply -f prometheus/1-prometheus-operator
+        kubectl apply -f prometheus/2-prometheus
+
+    - name: installing ingress-nginx
+      shell: |
+        helm repo add my-ing https://kubernetes.github.io/ingress-nginx
+        helm repo update
+        helm template my-ing ingress-nginx/ingress-nginx \
+        --namespace ingress \
+        --version 3.35.0 \
+        --values nginx-values.yaml \
+        --output-dir my-ing
+        helm install my-ing ingress-nginx/ingress-nginx \
+        --namespace ingress \
+        --version 3.35.0 \
+        --values nginx-values.yaml \
+        --create-namespace
+    
+    - name: sleep for 60 seconds and continue with play
+      wait_for:
+        timeout: 60
+
+    - name: edit ingress namespace, add prometheus to monitor
+      shell: |
+        kubectl label namespace ingress monitoring=prometheus
+    
+    - name: deploy Grafana
+      shell: |
+        kubectl apply -f grafana
+    
+    - name: sleep for 60 seconds wait for grafana pod, continue with play
+      wait_for:
+        timeout: 60
+    
+    #If you get an error, check if grafana pod is ready w/ $ kubectl get pods -n monitoring
+
+    - name: ingress prometheus
+      shell: |
+        kubectl apply -f ingress/0-prometheus-ingress.yaml
+    
+    - name: ingress grafana
+      shell: |
+        kubectl apply -f ingress/1-grafana-ingress.yaml
+    
+    #now grab the LB address and create records under the subdomain one each for prometheus and grafana
+    #use "$ kubectl get ing -n monitoring" to get address for CNAME

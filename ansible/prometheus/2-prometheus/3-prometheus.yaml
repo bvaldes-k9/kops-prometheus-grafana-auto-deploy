@@ -1,0 +1,18 @@
+---
+apiVersion: monitoring.coreos.com/v1
+kind: Prometheus
+metadata:
+  name: prometheus
+  namespace: monitoring
+  #remember this replica of 1 is not standard and there isnt any volumes attached so if the instance is restarted all data is lost
+spec:
+  replicas: 1
+  serviceAccountName: prometheus
+  serviceMonitorSelector:
+  #this match label will be ref in the ingress later on
+    matchLabels:
+      ocean: "atlantic"
+  serviceMonitorNamespaceSelector:
+    matchLabels:
+      monitoring: prometheus
+#there is no persistent volumes here so if prometheus is restarted you will lose all data 
